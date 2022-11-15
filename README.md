@@ -55,62 +55,360 @@ tramite repository docker, non usando i pacchetti di redhat). Il server deve ris
 
 3. Installiamo docker con questi comandi:
 
-        ### COMPLETATA L'INSTALLAZIONE DI OL9 INSTALLIAMO DOCKER
-        dnf install -y yum-utils
-        yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-        yum install docker-ce docker-ce-cli containerd.io
+  ```bash
+### COMPLETATA L'INSTALLAZIONE DI OL9 INSTALLIAMO DOCKER
+dnf install -y yum-utils
+yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+yum install docker-ce docker-ce-cli containerd.io
+```
 
 4. Configuriamo la sincronizzazione dell'orario. Tutte i server coivolti devono avere l'orario sincronizzato
 correttamente per evitare errori durante l'autenticazione:
 
-        #### SINCRONIZZAZIONE OROLOGIO - IMPORTANTE !! #######################################################
-        # Configurazione sincronizzazione orologio (da fare su tutti i server coinvolti)
-        dnf -y install chrony
-        systemctl enable chronyd
-        # Rimuovo dal file /etc/chrony.conf le righe con pool gia' presenti e aggiungo i server italiani:
-        sed -i 's/^pool.*//' /etc/chrony.conf
-        echo 'pool ntp1.inrim.it iburst' | tee -a /etc/chrony.conf
-        echo 'pool ntp2.inrim.it iburst' | tee -a /etc/chrony.conf
-        # Avvio il servizio
-        systemctl start chronyd
-        # Verificare lo stato con il comando: chronyc -n tracking
-        # il Leap status deve essere "Normal"
-        #### SINCRONIZZAZIONE OROLOGIO - IMPORTANTE !! #######################################################
+  ```bash
+#### SINCRONIZZAZIONE OROLOGIO - IMPORTANTE !! #######################################################
+# Configurazione sincronizzazione orologio (da fare su tutti i server coinvolti)
+dnf -y install chrony
+systemctl enable chronyd
+# Rimuovo dal file /etc/chrony.conf le righe con pool gia' presenti e aggiungo i server italiani:
+sed -i 's/^pool.*//' /etc/chrony.conf
+echo 'pool ntp1.inrim.it iburst' | tee -a /etc/chrony.conf
+echo 'pool ntp2.inrim.it iburst' | tee -a /etc/chrony.conf
+# Avvio il servizio
+systemctl start chronyd
+# Verificare lo stato con il comando: chronyc -n tracking
+# il Leap status deve essere "Normal"
+#### SINCRONIZZAZIONE OROLOGIO - IMPORTANTE !! #######################################################
+```
 
 5. Configuriamo gli hostname (nel caso siano configurati sul server DNS questa configurazione non è necessaria)
-        
-        Nel file /etc/hosts del server docker 10.0.0.8 inserire gli host coinvolti con questi comandi:
-        echo '10.0.0.8  spidvalidator.DOMINIO_ENTE.it' >> /etc/hosts
-        echo '10.0.0.9  spidauth.DOMINIO_ENTE.it' >> /etc/hosts
-        echo '10.0.0.10 servizio_al_pubblico.DOMINIO_ENTE.it' >> /etc/hosts
+
+  Nel file /etc/hosts del server docker 10.0.0.8 inserire gli host coinvolti con questi comandi:
+
+  ```bash
+echo '10.0.0.8  spidvalidator.DOMINIO_ENTE.it' >> /etc/hosts
+echo '10.0.0.9  spidauth.DOMINIO_ENTE.it' >> /etc/hosts
+echo '10.0.0.10 servizio_al_pubblico.DOMINIO_ENTE.it' >> /etc/hosts
+```
 
 6. Avviamo il container italia/spid-saml-check con questi comandi:
 
-        ## Comando per eliminarlo: docker container stop spid_validator && docker container rm spid_validator
-        docker run --name spid_validator -p 443:443 --env NODE_HTTPS_PORT=443 --add-host=spidvalidator.DOMINIO_ENTE.it:10.0.0.8 --add-host=spidauth.DOMINIO_ENTE.it:10.0.0.9 --add-host=servizio_al_pubblico.DOMINIO_ENTE.it:10.0.0.10 italia/spid-saml-check:1.9.2
+  ```bash
+  ## Comando per eliminarlo: docker container stop spid_validator && docker container rm spid_validator
+  docker run --name spid_validator -p 443:443 --env NODE_HTTPS_PORT=443 --add-host=spidvalidator.DOMINIO_ENTE.it:10.0.0.8 --add-host=spidauth.DOMINIO_ENTE.it:10.0.0.9 --add-host=servizio_al_pubblico.DOMINIO_ENTE.it:10.0.0.10 italia/spid-saml-check:1.9.2
+```
 
 7. Configuriamo il container per utilizzare la porta 443 invece che la 8443 e gli hostname scelti sopra:
 
-        # Entrare nel container e fare queste modifiche
-        docker exec -ti spid_validator /bin/bash
-        apt install nano iputils-ping vim -y
-        sed -i 's/localhost:8443/spidvalidator.DOMINIO_ENTE.it/' /spid-saml-check/spid-validator/config/idp.json
-        sed -i 's/localhost:8443/spidvalidator.DOMINIO_ENTE.it/' /spid-saml-check/spid-validator/config/idp_demo.json
-        sed -i 's/localhost/spidvalidator.DOMINIO_ENTE.it/'      /spid-saml-check/spid-validator/config/server.json
-        sed -i 's/8443/443/'                               /spid-saml-check/spid-validator/config/server.json
-        # Questo serve a non mettere :443 nel link https nei metadata.xml
-        sed -i 's/"useProxy": false/"useProxy": true/'     /spid-saml-check/spid-validator/config/server.json
-        exit
-        docker container stop spid_validator && docker container start spid_validator
+  ```bash
+# Entrare nel container e fare queste modifiche
+docker exec -ti spid_validator /bin/bash
+apt install nano iputils-ping vim -y
+sed -i 's/localhost:8443/spidvalidator.DOMINIO_ENTE.it/' /spid-saml-check/spid-validator/config/idp.json
+sed -i 's/localhost:8443/spidvalidator.DOMINIO_ENTE.it/' /spid-saml-check/spid-validator/config/idp_demo.json
+sed -i 's/localhost/spidvalidator.DOMINIO_ENTE.it/'      /spid-saml-check/spid-validator/config/server.json
+sed -i 's/8443/443/'                               /spid-saml-check/spid-validator/config/server.json
+# Questo serve a non mettere :443 nel link https nei metadata.xml
+sed -i 's/"useProxy": false/"useProxy": true/'     /spid-saml-check/spid-validator/config/server.json
+exit
+docker container stop spid_validator && docker container start spid_validator
+```
 
 8. Verifichiamo se l'installazione ha funzionato. Dovrebbero rispondere i seguenti link (le credenziali sono validator/validator):
+* https://10.0.0.8/
+* https://10.0.0.8/metadata.xml
+* https://10.0.0.8/demo
+* https://10.0.0.8/demo/metadata.xml
+
+  e aggiungendo gli host al proprio PC, modificando come amministratore il file `C:\Windows\System32\drivers\etc\hosts` a questi link:
+
 * https://spidvalidator.DOMINIO_ENTE.it/
 * https://spidvalidator.DOMINIO_ENTE.it/metadata.xml
 * https://spidvalidator.DOMINIO_ENTE.it/demo
 * https://spidvalidator.DOMINIO_ENTE.it/demo/metadata.xml
 
+
 ### 2. Creazione certificato per firma metadata
 
+Per la creazione della coppia di chiavi utilizzata per firmare il metadata.xml, utilizziamo
+il container italia/spid-compliant-certificates. I file andranno configurati su satosa che
+provvederà a firmare gli xml. Utilizziamo il docker installato sul server 10.0.0.8
+
+1. Colleghiamoci al server 10.0.0.8 creamo la cartella /root/spid_certs dove il container
+salverà i certificati:
+
+  ```bash
+# Correggo con chmod i permessi, altrimenti mi da accesso negato:
+mkdir /root/spid_certs
+chmod 777 -R /root/spid_certs
+```
+
+2. Eseguo il container col comando sotto, corregendo i parametri corretti:
+  * DOMINIO_ENTE.it: inserire quello del proprio ente
+  * org-id: deve essere uguale a PA:IT- seguito dal **codice ipa**, per esempio PA:IT-asl_bat
+  * entity-id: deve essere uguale a entityID del tag EntityDescriptor nell'xml (quello generato da
+    satosa è esattamente così: https://\<HOSTNAME_PROXY_SATOSA\>/spidSaml2/metadata)
+  * validity: non c'è nessun requisito sulla validity, lo imposto 100 anni (36500 giorni) così non scade
+
+  ```bash
+docker run --name spid_genera_certificati -ti --rm \
+    -v "/root/spid_certs:/certs" \
+    italia/spid-compliant-certificates generator \
+        --key-size 3072 \
+        --common-name "DOMINIO_ENTE.it" \
+        --days 36500 \
+        --entity-id https://spidauth.DOMINIO_ENTE.it/spidSaml2/metadata \
+        --locality-name Andria \
+        --org-id "PA:IT-<CODICE_IPA>" \
+        --org-name "ASL BT" \
+        --sector public
+```
+
+  Una volta eseguito questo comando troverete nella cartella /root/spid_certs i file:
+  * key.pem
+  * csr.pem
+  * crt.pem
+
+  Salvarsi questi file scaricandoli dal server 10.0.0.8. I file si possono aprire su windows aggiungendo l'estensione .crt. Questi andranno copiati sul server proxy satosa.
+
 ### 3. Installazione e configurazione Satosa
+
+1. A questo punto procediamo con l'installazione del server dove installeremo satosa e funzionerà da proxy SPID. Anche qui predisponiamo un nuovo server con Oracle Linux 9.0. Il server nell'esempio risponde all'hostname:
+`spidauth.DOMINIO_ENTE.it` e ha come ip: `10.0.0.9`.
+
+2. Anche qui configuriamo la sincronizzazione dell'orario. Tutte i server coivolti devono avere l'orario sincronizzato correttamente per evitare errori durante l'autenticazione:
+
+  ```bash
+#### SINCRONIZZAZIONE OROLOGIO - IMPORTANTE !! #######################################################
+# Configurazione sincronizzazione orologio (da fare su tutti i server coinvolti)
+dnf -y install chrony
+systemctl enable chronyd
+# Rimuovo dal file /etc/chrony.conf le righe con pool gia' presenti e aggiungo i server italiani:
+sed -i 's/^pool.*//' /etc/chrony.conf
+echo 'pool ntp1.inrim.it iburst' | tee -a /etc/chrony.conf
+echo 'pool ntp2.inrim.it iburst' | tee -a /etc/chrony.conf
+# Avvio il servizio
+systemctl start chronyd
+# Verificare lo stato con il comando: chronyc -n tracking
+# il Leap status deve essere "Normal"
+#### SINCRONIZZAZIONE OROLOGIO - IMPORTANTE !! #######################################################
+```
+
+3. Installiamo i pacchetti che ci serviranno:
+
+   ```bash
+dnf install -y nginx chrony libffi-devel gcc git-core openssl-devel python3-devel python3-pip xmlsec1 procps pcre pcre-devel openssh-clients
+```
+
+4. Installiamo pip e virtualenv:
+
+   ```bash
+pip install -U pip
+pip install -U virtualenv
+```
+
+5. Creamo la cartella dove installeremo satosa (scelgo /opt/satosa_spid_proxy) e la cartella dove andremo a
+salvare i certificati generati dal container spid-compliant-certificates e che si trovano sul server 10.0.0.8
+nella cartella /root/spid_certs:
+
+   ```bash
+mkdir -p /opt/satosa_spid_proxy/pki_spid
+```
+
+6. Copiamo i certificati creati con docker dal server 10.0.0.8 in `/root/spid_certs` al server satosa 10.0.0.9
+in `/opt/satosa_spid_proxy/pki_spid`, con scp, o trasferendo i file da windows con WinSCP:
+   ```bash
+scp root@10.0.0.8:/root/spid_certs/* /opt/satosa_spid_proxy/pki_spid
+```
+
+7. Spostiamoci nella cartella `/opt/satosa_spid_proxy` e installiamo satosa:
+
+   ```bash
+cd /opt/satosa_spid_proxy
+virtualenv -ppython3 satosa.env
+source satosa.env/bin/activate
+pip install --upgrade pip
+git clone https://github.com/italia/Satosa-Saml2Spid.git repository
+pip install -r repository/requirements.txt
+# Copio i file di configurazione di esempio che andranno modificati
+cp -R repository/example/* .
+```
+
+
+```
+
+============DA SISTEMARE============
+# Commentare nel file proxy_conf.yaml in FRONTEND_MODULES:
+  # - "plugins/frontends/oidc_op_frontend.yaml"
+
+# e in BACKEND_MODULES:
+  #- "plugins/backends/saml2_backend.yaml"
+
+firewall-cmd --zone=public --add-service=http
+firewall-cmd --zone=public --add-service=https
+firewall-cmd --zone=public --permanent --add-service=http
+firewall-cmd --zone=public --permanent --add-service=https
+
+echo '10.0.0.9 spidauth.DOMINIO_ENTE.it' | tee -a /etc/hosts
+cp /etc/nginx/nginx.conf /etc/nginx/nginx_bckol9.conf
+cp /opt/satosa_spid_proxy/uwsgi_setup/nginx/socket_proxy.conf /etc/nginx/conf.d/satosa.conf
+Eliminare dal file /etc/nginx/nginx.conf la sezione server {}
+
+Nel file /etc/nginx/conf.d/satosa.conf
+Aggiornare il percorso del file sock:
+upstream satosa-saml2 {
+  server unix:///opt/satosa_spid_proxy/tmp/sockets/satosa.sock;
+}
+
+Aggiornare la static
+ location /static  {
+    alias /opt/satosa_spid_proxy/static;
+
+e in location /
+    # include     /opt/satosa-saml2/uwsgi_setup/uwsgi_params; # the uwsgi_params file you installed
+    include     /opt/satosa_spid_proxy/uwsgi_setup/uwsgi_params;
+
+COMMENTARE ssl_dhparam
+
+Creare la cartella
+mkdir /opt/nginx_certs
+e copiarci i certificati ssl registrati per il proprio ente per *.DOMINIO_ENTE.it oppure se non wildcard
+per spidauth.DOMINIO_ENTE.it
+
+Impostarli nel file /etc/nginx/conf.d/satosa.conf
+
+  ssl_certificate /opt/nginx_certs/_.DOMINIO_ENTE.it.cer;
+  ssl_certificate_key /opt/nginx_certs/_.DOMINIO_ENTE.it.key;
+
+mkdir -p /opt/satosa_spid_proxy/tmp/sockets
+modificare i file
+/opt/satosa_spid_proxy/uwsgi_setup/SystemD/sotosa.socket
+/opt/satosa_spid_proxy/uwsgi_setup/SystemD/sotosa.service
+sostituendo
+/home/satosa/production/current
+con
+/opt/satosa_spid_proxy
+
+Nel file sotosa.service correggere il requires, manca et dopo sock
+Requires=satosa.socket
+
+Copiare i file satosa.service e satosa.sock in /etc/systemd/systemd
+/opt/satosa_spid_proxy/uwsgi_setup/SystemD
+cp satosa.service /etc/systemd/system
+cp satosa.socket /etc/systemd/system
+
+Configurare l'utente satosa, sia in satosa.service che in satosa.socket:
+
+## Verificare il file: /etc/systemd/system/satosa.service
+## satosa.service #####################################################
+Description=UWSGI server for Satosa Proxy
+After=syslog.target
+Requires=satosa.socket
+[Service]
+Type=simple
+User=satosa
+Group=satosa
+WorkingDirectory=/opt/satosa_spid_proxy
+ExecStart=/bin/bash -c 'cd /opt/satosa_spid_proxy && source satosa.env/bin/activate && uwsgi --ini ./uwsgi_setup/uwsgi/uwsgi.ini.socket --thunder-lock'
+Restart=always
+KillSignal=SIGQUIT
+[Install]
+WantedBy=sockets.target
+## satosa.service (end) ###############################################
+
+## Verificare il file: /etc/systemd/system/satosa.socket
+## satosa.socket ######################################################
+[Unit]
+Description=Socket for satosa
+[Socket]
+SocketUser=satosa
+SocketGroup=satosa
+# Change this to your uwsgi application port or unix socket location
+ListenStream=/opt/satosa_spid_proxy/tmp/sockets/satosa.sock
+SocketMode=0770
+[Install]
+WantedBy=sockets.target
+## satosa.socket (end) ################################################
+
+systemctl daemon-reload
+systemctl enable satosa.sock
+systemctl enable satosa.service
+useradd satosa
+mkdir -p /opt/satosa_spid_proxy/logs/uwsgi
+chown -R satosa:satosa /opt/satosa_spid_proxy
+
+usermod -a -G satosa nginx
+
+A questo punto dovrebbe rispondere da questi url:
+
+https://spidauth.aslbat.it/spidSaml2/metadata
+https://spidauth.aslbat.it/Saml2IDP/metadata
+## Questo no perche' abbiamo disabilitato il saml2 standard che non ci serve: https://spidauth.aslbat.it/Saml2/metadata
+
+wget https://registry.spid.gov.it/metadata/idp/spid-entities-idps.xml -O /opt/satosa_spid_proxy/metadata/idp/spid-entities-idps.xml
+
+
+# Bisogna trovare il percorso del file wsgi.py con questi comandi, da inserire nel file
+# /opt/satosa_spid_proxy/uwsgi_setup/uwsgi/uwsgi.ini.socket
+# cd /opt/satosa_spid_proxy
+# virtualenv -ppython3 satosa.env
+# source satosa.env/bin/activate
+# SATOSA_APP=$VIRTUAL_ENV/lib/$(python -c 'import sys; print(f"python{sys.version_info.major}.{sys.version_info.minor}")')/site-packages/satosa
+# /opt/satosa_spid_proxy/satosa.env/lib/python3.9/site-packages/satosa
+# PER TEST AVVIARE SATOSA
+# export SATOSA_APP=$VIRTUAL_ENV/lib/$(python -c 'import sys; print(f"python{sys.version_info.major}.{sys.version_info.minor}")')/site-packages/satosa
+# uwsgi --wsgi-file $SATOSA_APP/wsgi.py  --socket /opt/satosa_spid_proxy/tmp/sockets/satosa.sock --chmod-socket 770 --callable app -b 32768
+
+
+# Modificare il file plugins/microservices/target_based_routing.yaml
+# e inserire come default mapping:
+config:
+  default_backend: spidSaml2
+
+# Oppure inserire il proprio validator se non standard in target_mappings
+# "https://validator.DOMINIO_ENTE.it": "spidSaml2"
+# oppure
+# Se non presente si riceve l'errore in satosa_spid_proxy]# vi logs/uwsgi/satosa_spid_proxy.log:
+# [2022-11-07 09:18:20] [INFO ]: {'msg': 'decided target backend by target issuer', 'target_issuer': 'https://spidvalidator.DOMINIO_ENTE.it', 'target_backend': 'Saml2'}
+# [2022-11-07 09:18:20] [ERROR]: KeyError: 'Saml2'
+# Questo perche' sceglie come backend il Saml2, che ho disabilitato e che comunque non funzionerebbe con i provider spid
+
+# Aggiungere gli idp di test nel file /opt/satosa_spid_proxy/metadata/idp/spid-entities-idps.xml
+# dove sono presenti gli idp ufficiali
+# aggiungendo alla fine prima della chiusura del tag md:EntitiesDescriptor gli EntityDescriptor presi dai file xml a questi link:
+# https://spidvalidator.DOMINIO_ENTE.it/metadata.xml
+# https://spidvalidator.DOMINIO_ENTE.it/demo/metadata.xml
+# in questo modo:
+
+  <md:EntityDescriptor ID="_feb2b3550c8b9605fd73fe0fe8d3c94f4ba8f5e74e" entityID="https://spidvalidator.DOMINIO_ENTE.it" ....
+  <md:EntityDescriptor ID="_3f7b3aa70ad110567535fa94636428f5f1f656ecf0" entityID="https://spidvalidator.DOMINIO_ENTE.it/demo" ...
+</md:EntitiesDescriptor>
+
+
+# Modificare il file js:
+/opt/satosa_spid_proxy/static/spid/spid-idps.js
+# aggiungendo i provider di test:
+
+const idps = [
+  // aggiunti i 2 provider di test:
+  {"entityName": "SPID Test", "entityID": "https://spidvalidator.DOMINIO_ENTE.it", "logo": ""},
+  {"entityName": "SPID Test DEMO", "entityID": "https://spidvalidator.DOMINIO_ENTE.it/demo", "logo": ""},
+
+  // idp ufficiali:
+  {"entityName": "Aruba ID", "entityID": "https://loginspid.aruba.it", "logo": "spid/spid-idp-arubaid.svg"},
+  .....
+  {"entityName": "Tim ID", "entityID": "https://login.id.tim.it/affwebservices/public/saml2sso", "logo": "spid/spid-idp-timid.svg"}
+]
+
+
+# Inserire nella cartella /opt/satosa_spid_proxy/metadata/sp
+# i metadata dei service provider interni che dovranno utilizzare il proxy SPID
+
+# Modificare i file:
+/opt/satosa_spid_proxy/plugins/backends/spidsaml2_backend.yaml
+/opt/satosa_spid_proxy/plugins/frontends/saml2_frontend.yaml
+/opt/satosa_spid_proxy/proxy_conf.yaml
+
+
 
 ### 4. Configurazione servizio di test
