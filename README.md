@@ -77,7 +77,8 @@ correttamente per evitare errori durante l'autenticazione:
         # il Leap status deve essere "Normal"
         #### SINCRONIZZAZIONE OROLOGIO - IMPORTANTE !! #######################################################
 
-5. Configuriamo gli hostname (nel caso siano configurati sul server DNS questa configurazione non è necessaria)        
+5. Configuriamo gli hostname (nel caso siano configurati sul server DNS questa configurazione non è necessaria)
+        
         Nel file /etc/hosts del server docker 10.0.0.8 inserire gli host coinvolti con questi comandi:
         echo '10.0.0.8  spidvalidator.DOMINIO_ENTE.it' >> /etc/hosts
         echo '10.0.0.9  spidauth.DOMINIO_ENTE.it' >> /etc/hosts
@@ -103,10 +104,10 @@ correttamente per evitare errori durante l'autenticazione:
         docker container stop spid_validator && docker container start spid_validator
 
 8. Verifichiamo se l'installazione ha funzionato. Dovrebbero rispondere i seguenti link (le credenziali sono validator/validator):
-* https://spidvalidator.aslbat.it/
-* https://spidvalidator.aslbat.it/metadata.xml
-* https://spidvalidator.aslbat.it/demo
-* https://spidvalidator.aslbat.it/demo/metadata.xml
+* https://spidvalidator.DOMINIO_ENTE.it/
+* https://spidvalidator.DOMINIO_ENTE.it/metadata.xml
+* https://spidvalidator.DOMINIO_ENTE.it/demo
+* https://spidvalidator.DOMINIO_ENTE.it/demo/metadata.xml
 
 ### 2. Creazione certificato per firma metadata
 
