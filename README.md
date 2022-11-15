@@ -55,10 +55,12 @@ tramite repository docker, non usando i pacchetti di redhat). Il server deve ris
 
 3. Installiamo docker con questi comandi:
 
-        ### COMPLETATA L'INSTALLAZIONE DI OL9 INSTALLIAMO DOCKER
-        dnf install -y yum-utils
-        yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-        yum install docker-ce docker-ce-cli containerd.io
+```bash
+### COMPLETATA L'INSTALLAZIONE DI OL9 INSTALLIAMO DOCKER
+dnf install -y yum-utils
+yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+yum install docker-ce docker-ce-cli containerd.io
+```
 
 4. Configuriamo la sincronizzazione dell'orario. Tutte i server coivolti devono avere l'orario sincronizzato
 correttamente per evitare errori durante l'autenticazione:
