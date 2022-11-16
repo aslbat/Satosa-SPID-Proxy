@@ -174,7 +174,7 @@ docker run --name spid_genera_certificati -ti --rm \
 ### 3. Installazione e configurazione Satosa
 
 1. A questo punto procediamo con l'installazione del server dove installeremo satosa e funzionerà da proxy SPID. Anche qui predisponiamo un nuovo server con Oracle Linux 9.0. Il server nell'esempio risponde all'hostname:
-`spidauth.DOMINIO_ENTE.it` e ha come ip: `10.0.0.9`.
+`spidauth.DOMINIO_ENTE.it` e ha come ip: `10.0.0.9`. L'installazione la faremo nella cartella `/opt/satosa_spid_proxy`.
 
 2. Anche qui configuriamo la sincronizzazione dell'orario. Tutte i server coivolti devono avere l'orario sincronizzato correttamente per evitare errori durante l'autenticazione:
 
@@ -207,7 +207,7 @@ pip install -U pip
 pip install -U virtualenv
 ```
 
-5. Creamo la cartella dove installeremo satosa (scelgo /opt/satosa_spid_proxy) e la cartella dove andremo a
+5. Creamo la cartella dove installeremo satosa (scelgo `/opt/satosa_spid_proxy`) e la cartella dove andremo a
 salvare i certificati generati dal container spid-compliant-certificates e che si trovano sul server 10.0.0.8
 nella cartella /root/spid_certs:
 
@@ -234,75 +234,166 @@ pip install -r repository/requirements.txt
 cp -R repository/example/* .
 ```
 
+8. Disabilitiamo i plugin che non ci servono. Nel file /opt/satosa_spid_proxy/proxy_conf.yaml
 
-```
-============DA SISTEMARE============
-# Commentare nel file proxy_conf.yaml in FRONTEND_MODULES:
+  ```yaml
+# commentare in FRONTEND_MODULES:
   # - "plugins/frontends/oidc_op_frontend.yaml"
 
 # e in BACKEND_MODULES:
   #- "plugins/backends/saml2_backend.yaml"
+```
 
+9. Disabilitiamo il firewall sulle porte 80 e 443
 firewall-cmd --zone=public --add-service=http
 firewall-cmd --zone=public --add-service=https
 firewall-cmd --zone=public --permanent --add-service=http
 firewall-cmd --zone=public --permanent --add-service=https
 
+10. Configuriamo gli host, se non gestiti dal DNS:
+  ```bash
 echo '10.0.0.9 spidauth.DOMINIO_ENTE.it' | tee -a /etc/hosts
-cp /etc/nginx/nginx.conf /etc/nginx/nginx_bckol9.conf
-cp /opt/satosa_spid_proxy/uwsgi_setup/nginx/socket_proxy.conf /etc/nginx/conf.d/satosa.conf
-Eliminare dal file /etc/nginx/nginx.conf la sezione server {}
+```
 
-Nel file /etc/nginx/conf.d/satosa.conf
-Aggiornare il percorso del file sock:
+11. Configuriamo nginx
+  ```bash
+# Facciamo una copia di backup della configurazione originale
+mv /etc/nginx/nginx.conf /etc/nginx/nginx_bckol9.conf
+```
+
+  Creamo la cartella dove salveremo i certificati ssl registrati dal proprio ente:
+  ```bash
+mkdir /opt/nginx_certs
+```
+  e copiarci i certificati ssl registrati per il proprio ente per *.DOMINIO_ENTE.it oppure se non wildcard
+  per spidauth.DOMINIO_ENTE.it
+
+  Creamo il file `/etc/nginx/nginx.conf` con questo contenuto:
+
+```nginx
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log;
+pid /run/nginx.pid;
+# Load dynamic modules. See /usr/share/doc/nginx/README.dynamic.
+include /usr/share/nginx/modules/*.conf;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+
+    access_log  /var/log/nginx/access.log  main;
+
+    sendfile            on;
+    tcp_nopush          on;
+    tcp_nodelay         on;
+    keepalive_timeout   65;
+    types_hash_max_size 4096;
+
+    include             /etc/nginx/mime.types;
+    default_type        application/octet-stream;
+
+    include /etc/nginx/conf.d/*.conf;
+}
+```
+
+  Creamo il file `/etc/nginx/conf.d/satosa.conf` con questo contenuto, cambiando DOMINIO_ENTE col proprio:
+
+```nginx
+# the upstream component nginx needs to connect to
 upstream satosa-saml2 {
   server unix:///opt/satosa_spid_proxy/tmp/sockets/satosa.sock;
 }
 
-Aggiornare la static
- location /static  {
-    alias /opt/satosa_spid_proxy/static;
+# configuration of the server
+server {
+  listen      80;
+  server_name spidauth.DOMINIO_ENTE.it;
+  access_log /var/log/nginx/proxy_satosa_it.access.log;
+  error_log  /var/log/nginx/proxy_satosa_it.error.log error;
+  return 301 https://$host$request_uri;
+}
 
-e in location /
-    # include     /opt/satosa-saml2/uwsgi_setup/uwsgi_params; # the uwsgi_params file you installed
-    include     /opt/satosa_spid_proxy/uwsgi_setup/uwsgi_params;
-
-COMMENTARE ssl_dhparam
-
-Creare la cartella
-mkdir /opt/nginx_certs
-e copiarci i certificati ssl registrati per il proprio ente per *.DOMINIO_ENTE.it oppure se non wildcard
-per spidauth.DOMINIO_ENTE.it
-
-Impostarli nel file /etc/nginx/conf.d/satosa.conf
-
+server {
+  server_name spidauth.DOMINIO_ENTE.it;
+  listen 443 ssl;
+  
+  #####
+  ##### QUI VANNO MESSE LE CHIAVI SSL REGISTRATE PER IL PROPRIO ENTE
+  #####
   ssl_certificate /opt/nginx_certs/_.DOMINIO_ENTE.it.cer;
   ssl_certificate_key /opt/nginx_certs/_.DOMINIO_ENTE.it.key;
 
-mkdir -p /opt/satosa_spid_proxy/tmp/sockets
-modificare i file
-/opt/satosa_spid_proxy/uwsgi_setup/SystemD/sotosa.socket
-/opt/satosa_spid_proxy/uwsgi_setup/SystemD/sotosa.service
-sostituendo
-/home/satosa/production/current
-con
-/opt/satosa_spid_proxy
+  access_log /var/log/nginx/proxy_satosa_it.log;
+  error_log  /var/log/nginx/proxy_satosa_it.log error;
 
-Nel file sotosa.service correggere il requires, manca et dopo sock
-Requires=satosa.socket
+  # max upload size
+  client_max_body_size 8M;
+    
+  # very long url for delega ticket
+  large_client_header_buffers 4 16k;
 
-Copiare i file satosa.service e satosa.sock in /etc/systemd/systemd
-/opt/satosa_spid_proxy/uwsgi_setup/SystemD
-cp satosa.service /etc/systemd/system
-cp satosa.socket /etc/systemd/system
+  # SSL HARDENING
+  # disable poodle attack
+  ssl_protocols TLSv1.2 TLSv1.3;
+  ssl_prefer_server_ciphers on;
+  # COMMENTATO ssl_dhparam /etc/nginx/dhparam.pem;
+  ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-SHA384;ssl_ecdh_curve secp384r1; # Requires nginx >= 1.1.0
+  ssl_session_timeout  10m;
+  ssl_session_cache shared:SSL:10m;
+  ssl_session_tickets off; # Requires nginx >= 1.5.9
+  ssl_stapling on; # Requires nginx >= 1.3.7
+  ssl_stapling_verify on; # Requires nginx => 1.3.7
+  add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload";
+  add_header X-Frame-Options DENY;
+  add_header X-Content-Type-Options nosniff;
+  add_header X-XSS-Protection "1; mode=block";
+  add_header X-Robots-Tag none;
+  # FINE SSL HARDENING
 
-Configurare l'utente satosa, sia in satosa.service che in satosa.socket:
+  # satosa static
+  location /static  {
+    alias /opt/satosa_spid_proxy/static;
+    autoindex off;
+  }
 
-## Verificare il file: /etc/systemd/system/satosa.service
-## satosa.service #####################################################
+  # Finally, send all non-media requests to satosa server.
+  location / {
+    uwsgi_pass  satosa-saml2;
+    uwsgi_param HTTP_X_FORWARDED_PROTOCOL https;
+
+    # fix: Cookie SameSite: https://github.com/IdentityPython/SATOSA/issues/245
+    proxy_cookie_path ~(/*) "$1; SameSite=None; Secure";
+
+    # Enable HTTP Strict Transport Security with a 2 year duration
+    add_header Strict-Transport-Security "max-age=63072000; ";
+        
+    # deny iFrame
+    add_header X-Frame-Options "DENY";
+
+    uwsgi_read_timeout 40;
+    include     /opt/satosa_spid_proxy/uwsgi_setup/uwsgi_params;
+    # fix long url upstream buffer size
+    uwsgi_buffer_size          128k;
+    uwsgi_buffers              4 256k;
+    uwsgi_busy_buffers_size    256k;
+  }
+}
+```
+
+12. Configuriamo il servizio satosa:
+
+  Creare il file `/etc/systemd/system/satosa.service` con questo contenuto:
+  ```ini
 Description=UWSGI server for Satosa Proxy
 After=syslog.target
 Requires=satosa.socket
+
 [Service]
 Type=simple
 User=satosa
@@ -311,32 +402,77 @@ WorkingDirectory=/opt/satosa_spid_proxy
 ExecStart=/bin/bash -c 'cd /opt/satosa_spid_proxy && source satosa.env/bin/activate && uwsgi --ini ./uwsgi_setup/uwsgi/uwsgi.ini.socket --thunder-lock'
 Restart=always
 KillSignal=SIGQUIT
+
 [Install]
 WantedBy=sockets.target
-## satosa.service (end) ###############################################
+```
 
-## Verificare il file: /etc/systemd/system/satosa.socket
-## satosa.socket ######################################################
+  Creare il file `/etc/systemd/system/satosa.socket` con questo contenuto:
+  ```ini
 [Unit]
 Description=Socket for satosa
+
 [Socket]
 SocketUser=satosa
 SocketGroup=satosa
-# Change this to your uwsgi application port or unix socket location
 ListenStream=/opt/satosa_spid_proxy/tmp/sockets/satosa.sock
 SocketMode=0770
+
 [Install]
 WantedBy=sockets.target
-## satosa.socket (end) ################################################
+```
 
+Sovrascriviamo il file `/opt/satosa_spid_proxy/uwsgi_setup/uwsgi/uwsgi.ini.socket` con questo contenuto:
+  ```ini
+[uwsgi]
+# Questo deve essere il nome della cartella dove abbiamo installato satosa
+project     = satosa_spid_proxy
+base        = /opt
+
+##################
+################## INDIVIDUARE LA VERSIONE DI PYTHON DA INSERIRE NEL PERCORSO
+##################
+## SATOSA_APP=$VIRTUAL_ENV/lib/$(python -c 'import sys; print(f"python{sys.version_info.major}.{sys.version_info.minor}")')/site-packages/satosa
+## uwsgi --wsgi-file $SATOSA_APP/wsgi.py  --socket /opt/satosa_spid_proxy/tmp/sockets/satosa.sock --callable app -b 32768
+satosa_app  = /opt/satosa_spid_proxy/satosa.env/lib/python3.9/site-packages/satosa 
+
+chdir       = %(base)/%(project)
+uid         = satosa
+gid         = satosa
+socket      = %(base)/%(project)/tmp/sockets/satosa.sock
+chmod-socket = 770
+
+wsgi-file = %(satosa_app)/wsgi.py
+
+callable = app
+
+virtualenv  =  %(base)/%(project)/satosa.env
+
+logto = %(base)/%(project)/logs/uwsgi/%(project).log
+log-maxsize = 100000000
+log-backupname = %(base)/%(project)/logs/uwsgi/%(project).old.log
+
+# avoid: invalid request block size: 4420 (max 4096)...skip
+buffer-size=32768
+
+pidfile     = %(base)/%(project)/logs/uwsgi/%(project).pid
+touch-reload    = %(base)/%(project)/proxy_conf.yaml
+```
+
+  Creamo le cartelle e abilitiamo i servizi all'avvio:
+  ```bash
+mkdir -p /opt/satosa_spid_proxy/tmp/sockets
+mkdir -p /opt/satosa_spid_proxy/logs/uwsgi
+useradd satosa
 systemctl daemon-reload
 systemctl enable satosa.sock
 systemctl enable satosa.service
-useradd satosa
-mkdir -p /opt/satosa_spid_proxy/logs/uwsgi
+systemctl enable nginx
 chown -R satosa:satosa /opt/satosa_spid_proxy
-
 usermod -a -G satosa nginx
+service nginx restart
+service satosa restart
+```
 
 A questo punto dovrebbe rispondere da questi url:
 
