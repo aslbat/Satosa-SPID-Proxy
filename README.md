@@ -272,7 +272,7 @@ mv /etc/nginx/nginx.conf /etc/nginx/nginx_bckol9.conf
 mkdir /opt/nginx_certs
 ```
 
-**Copiamo i certificati ssl registrati per il proprio ente per *.DOMINIO_ENTE.it oppure se non wildcard
+**Copiamo i certificati ssl registrati per il proprio ente per \*.DOMINIO_ENTE.it oppure se non wildcard
 per spidauth.DOMINIO_ENTE.it, o utilizzare dei certificati self-signed, ma per il collaudo spid è necessario 
 che i certificati siano validi**
 
