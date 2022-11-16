@@ -627,7 +627,10 @@ server {
 ```
 
 3. Scarico l'xml dell'IDP interno satosa:
+
+```bash
 wget --no-check-certificate https://spidauth.DOMINIO_ENTE.it/Saml2IDP/metadata -O /var/simplesamlphp/config/metadata-idp-satosa.xml
+```
 
 4. Modifico la configurazione di simplesamlphp, impostando i parametri nel file `/var/simplesamlphp/config/config.php`:
 
