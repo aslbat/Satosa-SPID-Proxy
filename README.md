@@ -86,9 +86,9 @@ systemctl start chronyd
   Nel file /etc/hosts del server docker 10.0.0.8 inserire gli host coinvolti con questi comandi:
 
   ```bash
-echo '10.0.0.8  spidvalidator.DOMINIO_ENTE.it' >> /etc/hosts
-echo '10.0.0.9  spidauth.DOMINIO_ENTE.it' >> /etc/hosts
-echo '10.0.0.10 servizio_al_pubblico.DOMINIO_ENTE.it' >> /etc/hosts
+echo '10.0.0.8  spidvalidator.DOMINIO_ENTE.it' | tee -a /etc/hosts
+echo '10.0.0.9  spidauth.DOMINIO_ENTE.it' | tee -a /etc/hosts
+echo '10.0.0.10 servizio_al_pubblico.DOMINIO_ENTE.it' | tee -a /etc/hosts
 ```
 
 6. Avviamo il container italia/spid-saml-check con questi comandi:
@@ -234,7 +234,7 @@ pip install -r repository/requirements.txt
 cp -R repository/example/* .
 ```
 
-8. Disabilitiamo i plugin che non ci servono. Nel file /opt/satosa_spid_proxy/proxy_conf.yaml
+8. Disabilitiamo i plugin che non ci servono. Nel file `/opt/satosa_spid_proxy/proxy_conf.yaml`
 
   ```yaml
 # commentare in FRONTEND_MODULES:
@@ -256,6 +256,8 @@ firewall-cmd --zone=public --permanent --add-service=https
 10. Configuriamo gli host, se non gestiti dal DNS:
   ```bash
 echo '10.0.0.9 spidauth.DOMINIO_ENTE.it' | tee -a /etc/hosts
+echo '10.0.0.8  spidvalidator.DOMINIO_ENTE.it' | tee -a /etc/hosts
+echo '10.0.0.10 servizio_al_pubblico.DOMINIO_ENTE.it' | tee -a /etc/hosts
 ```
 
 11. Configuriamo nginx
@@ -269,8 +271,9 @@ mv /etc/nginx/nginx.conf /etc/nginx/nginx_bckol9.conf
   ```bash
 mkdir /opt/nginx_certs
 ```
-  Copiamo i certificati ssl registrati per il proprio ente per *.DOMINIO_ENTE.it oppure se non wildcard
-  per spidauth.DOMINIO_ENTE.it
+  **Copiamo i certificati ssl registrati per il proprio ente per *.DOMINIO_ENTE.it oppure se non wildcard
+  per spidauth.DOMINIO_ENTE.it, o utilizzare dei certificati self-signed, ma per il collaudo spid è necessario 
+  che i certificati siano validi**
 
   Creamo il file `/etc/nginx/nginx.conf` con questo contenuto:
 
@@ -306,7 +309,8 @@ http {
 }
 ```
 
-  Creamo il file `/etc/nginx/conf.d/satosa.conf` con questo contenuto, cambiando DOMINIO_ENTE col proprio:
+  Creamo il file `/etc/nginx/conf.d/satosa.conf` con questo contenuto, cambiando DOMINIO_ENTE col proprio
+  e verificando il percorso dei file del certificato ssl `_.DOMINIO_ENTE.it.cer` e `.key`:
 
 ```nginx
 # the upstream component nginx needs to connect to
@@ -435,7 +439,7 @@ WantedBy=sockets.target
 ```
 
   Sovrascriviamo il file `/opt/satosa_spid_proxy/uwsgi_setup/uwsgi/uwsgi.ini.socket` con questo contenuto
-  sostituendo la stringa python3.9 all'interno della proprietà satosa_app con la stringa recuperata al passo
+  sostituendo la stringa `python3.9` all'interno della proprietà `satosa_app` con la stringa recuperata al passo
   precedente:
   
   ```ini
@@ -487,8 +491,9 @@ touch-reload    = %(base)/%(project)/proxy_conf.yaml
 
   Aggiornando:
   * per tutti i file DOMINIO_ENTE.it con il proprio dominio
-  * in proxy_conf.yaml sostituire i CHANGE_ME con stringhe casuali
-  * in spidsaml2_backend.yaml:
+  * in `proxy_conf.yaml` sostituire i CHANGE_ME con stringhe casuali
+  * in `saml2_frontend.yaml` correggere i contatti in `contact_type`
+  * in `spidsaml2_backend.yaml`:
     * correggere name e display name di organization
     * in contact_person -> contact_type aggiornare con i propri valori
       * telephone_number: numero di telefono col +39 avanti
@@ -496,7 +501,11 @@ touch-reload    = %(base)/%(project)/proxy_conf.yaml
       * VATNumber: partita iva ente
       * IPACode: codice ipa ente
 
-  Creamo le cartelle e abilitiamo i servizi all'avvio:
+  Creamo le cartelle e abilitiamo i servizi all'avvio, ricordiamoci che il servizio `satosa` viene eseguito come utente `satosa`
+  per cui il proprietario della cartella `/opt/satosa_spid_proxy` deve essere l'utente `satosa`, quindi anche se abbiamo
+  modificato i file come root, il `chown` sotto ripristina i permessi della `/opt/satosa_spid_proxy` in modo tale che
+  il proprietario sia l'utente `satosa`:
+  
   ```bash
 mkdir -p /opt/satosa_spid_proxy/tmp/sockets
 mkdir -p /opt/satosa_spid_proxy/logs/uwsgi
@@ -511,13 +520,16 @@ service nginx restart
 service satosa restart
 ```
 
+13. Verifichiamo se l'installazione ha funzionato. Dovrebbero rispondere i seguenti link:
+  * https://10.0.0.9/Saml2IDP/metadata
+  * https://10.0.0.9/spidSaml2/metadata
+
+  e aggiungendo gli host al proprio PC, modificando come amministratore il file `C:\Windows\System32\drivers\etc\hosts` a questi link:
+  
+  * https://spidauth.DOMINIO_ENTE.it/Saml2IDP/metadata
+  * https://spidauth.DOMINIO_ENTE.it/spidSaml2/metadata
+  
   ```da sistemare
-A questo punto dovrebbe rispondere da questi url:
-
-https://spidauth.aslbat.it/spidSaml2/metadata
-https://spidauth.aslbat.it/Saml2IDP/metadata
-## Questo no perche' abbiamo disabilitato il saml2 standard che non ci serve: https://spidauth.aslbat.it/Saml2/metadata
-
 wget https://registry.spid.gov.it/metadata/idp/spid-entities-idps.xml -O /opt/satosa_spid_proxy/metadata/idp/spid-entities-idps.xml
 
 
