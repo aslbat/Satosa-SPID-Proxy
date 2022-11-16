@@ -196,13 +196,13 @@ systemctl start chronyd
 
 3. Installiamo i pacchetti che ci serviranno:
 
-   ```bash
+  ```bash
 dnf install -y nginx chrony libffi-devel gcc git-core openssl-devel python3-devel python3-pip xmlsec1 procps pcre pcre-devel openssh-clients
 ```
 
 4. Installiamo pip e virtualenv:
 
-   ```bash
+  ```bash
 pip install -U pip
 pip install -U virtualenv
 ```
@@ -211,19 +211,19 @@ pip install -U virtualenv
 salvare i certificati generati dal container spid-compliant-certificates e che si trovano sul server 10.0.0.8
 nella cartella /root/spid_certs:
 
-   ```bash
+  ```bash
 mkdir -p /opt/satosa_spid_proxy/pki_spid
 ```
 
 6. Copiamo i certificati creati con docker dal server 10.0.0.8 in `/root/spid_certs` al server satosa 10.0.0.9
 in `/opt/satosa_spid_proxy/pki_spid`, con scp, o trasferendo i file da windows con WinSCP:
-   ```bash
+  ```bash
 scp root@10.0.0.8:/root/spid_certs/* /opt/satosa_spid_proxy/pki_spid
 ```
 
 7. Spostiamoci nella cartella `/opt/satosa_spid_proxy` e installiamo satosa:
 
-   ```bash
+  ```bash
 cd /opt/satosa_spid_proxy
 virtualenv -ppython3 satosa.env
 source satosa.env/bin/activate
@@ -236,7 +236,6 @@ cp -R repository/example/* .
 
 
 ```
-
 ============DA SISTEMARE============
 # Commentare nel file proxy_conf.yaml in FRONTEND_MODULES:
   # - "plugins/frontends/oidc_op_frontend.yaml"
