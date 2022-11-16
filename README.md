@@ -530,51 +530,32 @@ service satosa restart
   * https://spidauth.DOMINIO_ENTE.it/Saml2IDP/metadata
   * https://spidauth.DOMINIO_ENTE.it/spidSaml2/metadata
   
-  ```da sistemare
+14. Aggiungiamo i metadata degli IDP ufficiali e di quello di test. Con questo comando aggiungiamo quelli ufficiali:
+  ```bash
 wget https://registry.spid.gov.it/metadata/idp/spid-entities-idps.xml -O /opt/satosa_spid_proxy/metadata/idp/spid-entities-idps.xml
+```
 
+  Poi aggiungiamo quelli di test, andiamo su questi link e scarichiamoci i file xml:
 
-# Bisogna trovare il percorso del file wsgi.py con questi comandi, da inserire nel file
-# /opt/satosa_spid_proxy/uwsgi_setup/uwsgi/uwsgi.ini.socket
-# cd /opt/satosa_spid_proxy
-# virtualenv -ppython3 satosa.env
-# source satosa.env/bin/activate
-# SATOSA_APP=$VIRTUAL_ENV/lib/$(python -c 'import sys; print(f"python{sys.version_info.major}.{sys.version_info.minor}")')/site-packages/satosa
-# /opt/satosa_spid_proxy/satosa.env/lib/python3.9/site-packages/satosa
-# PER TEST AVVIARE SATOSA
-# export SATOSA_APP=$VIRTUAL_ENV/lib/$(python -c 'import sys; print(f"python{sys.version_info.major}.{sys.version_info.minor}")')/site-packages/satosa
-# uwsgi --wsgi-file $SATOSA_APP/wsgi.py  --socket /opt/satosa_spid_proxy/tmp/sockets/satosa.sock --chmod-socket 770 --callable app -b 32768
+  * https://spidvalidator.DOMINIO_ENTE.it/metadata.xml
+  * https://spidvalidator.DOMINIO_ENTE.it/demo/metadata.xml
 
+  Apriamo questi file xml e copiamoci per ognuno tutto il tag `<md:EntityDescriptor`. Una volta copiati li inseriamo
+  nel file `/opt/satosa_spid_proxy/metadata/idp/spid-entities-idps.xml` alla fine prima della chiusura del tag
+  finale `</md:EntitiesDescriptor>`, in questo modo:
 
-# Modificare il file plugins/microservices/target_based_routing.yaml
-# e inserire come default mapping:
-config:
-  default_backend: spidSaml2
-
-# Oppure inserire il proprio validator se non standard in target_mappings
-# "https://validator.DOMINIO_ENTE.it": "spidSaml2"
-# oppure
-# Se non presente si riceve l'errore in satosa_spid_proxy]# vi logs/uwsgi/satosa_spid_proxy.log:
-# [2022-11-07 09:18:20] [INFO ]: {'msg': 'decided target backend by target issuer', 'target_issuer': 'https://spidvalidator.DOMINIO_ENTE.it', 'target_backend': 'Saml2'}
-# [2022-11-07 09:18:20] [ERROR]: KeyError: 'Saml2'
-# Questo perche' sceglie come backend il Saml2, che ho disabilitato e che comunque non funzionerebbe con i provider spid
-
-# Aggiungere gli idp di test nel file /opt/satosa_spid_proxy/metadata/idp/spid-entities-idps.xml
-# dove sono presenti gli idp ufficiali
-# aggiungendo alla fine prima della chiusura del tag md:EntitiesDescriptor gli EntityDescriptor presi dai file xml a questi link:
-# https://spidvalidator.DOMINIO_ENTE.it/metadata.xml
-# https://spidvalidator.DOMINIO_ENTE.it/demo/metadata.xml
-# in questo modo:
-
+  ```xml
+  ...
   <md:EntityDescriptor ID="_feb2b3550c8b9605fd73fe0fe8d3c94f4ba8f5e74e" entityID="https://spidvalidator.DOMINIO_ENTE.it" ....
   <md:EntityDescriptor ID="_3f7b3aa70ad110567535fa94636428f5f1f656ecf0" entityID="https://spidvalidator.DOMINIO_ENTE.it/demo" ...
 </md:EntitiesDescriptor>
+```
 
+15. Aggiungiamo il validator di test come IDP all'interno del file js che ci va a costruire il pulsante entra con spid.
+  Modifichiamo il file `/opt/satosa_spid_proxy/static/spid/spid-idps.js` aggiungendo gli IDP di test:
 
-# Modificare il file js:
-/opt/satosa_spid_proxy/static/spid/spid-idps.js
+  ```javascript
 # aggiungendo i provider di test:
-
 const idps = [
   // aggiunti i 2 provider di test:
   {"entityName": "SPID Test", "entityID": "https://spidvalidator.DOMINIO_ENTE.it", "logo": ""},
@@ -585,17 +566,10 @@ const idps = [
   .....
   {"entityName": "Tim ID", "entityID": "https://login.id.tim.it/affwebservices/public/saml2sso", "logo": "spid/spid-idp-timid.svg"}
 ]
+```
 
-
-# Inserire nella cartella /opt/satosa_spid_proxy/metadata/sp
-# i metadata dei service provider interni che dovranno utilizzare il proxy SPID
-
-# Modificare i file:
-/opt/satosa_spid_proxy/plugins/backends/spidsaml2_backend.yaml
-/opt/satosa_spid_proxy/plugins/frontends/saml2_frontend.yaml
-/opt/satosa_spid_proxy/proxy_conf.yaml
-
+16. A questo punto la configurazione è completa. I SP interni che utilizzeranno il proxy andranno configurati in satosa
+salvando i loro metadata.xml come service provider nella cartella `/opt/satosa_spid_proxy/metadata/sp`
 
 
 ### 4. Configurazione servizio di test
-```
