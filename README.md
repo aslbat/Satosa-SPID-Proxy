@@ -474,6 +474,7 @@ service nginx restart
 service satosa restart
 ```
 
+  ```da sistemare
 A questo punto dovrebbe rispondere da questi url:
 
 https://spidauth.aslbat.it/spidSaml2/metadata
@@ -547,3 +548,4 @@ const idps = [
 
 
 ### 4. Configurazione servizio di test
+```
