@@ -1,0 +1,11 @@
+[Unit]
+Description=Socket for satosa
+
+[Socket]
+SocketUser=satosa
+SocketGroup=satosa
+ListenStream=/opt/satosa_spid_proxy/tmp/sockets/satosa.sock
+SocketMode=0770
+
+[Install]
+WantedBy=sockets.target

@@ -1,0 +1,15 @@
+Description=UWSGI server for Satosa Proxy
+After=syslog.target
+Requires=satosa.socket
+
+[Service]
+Type=simple
+User=satosa
+Group=satosa
+WorkingDirectory=/opt/satosa_spid_proxy
+ExecStart=/bin/bash -c 'cd /opt/satosa_spid_proxy && source satosa.env/bin/activate && uwsgi --ini ./uwsgi_setup/uwsgi/uwsgi.ini.socket --thunder-lock'
+Restart=always
+KillSignal=SIGQUIT
+
+[Install]
+WantedBy=sockets.target

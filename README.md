@@ -239,16 +239,19 @@ cp -R repository/example/* .
   ```yaml
 # commentare in FRONTEND_MODULES:
   # - "plugins/frontends/oidc_op_frontend.yaml"
-
+#
 # e in BACKEND_MODULES:
-  #- "plugins/backends/saml2_backend.yaml"
+  # - "plugins/backends/saml2_backend.yaml"
 ```
 
 9. Disabilitiamo il firewall sulle porte 80 e 443
+
+  ```bash
 firewall-cmd --zone=public --add-service=http
 firewall-cmd --zone=public --add-service=https
 firewall-cmd --zone=public --permanent --add-service=http
 firewall-cmd --zone=public --permanent --add-service=https
+```
 
 10. Configuriamo gli host, se non gestiti dal DNS:
   ```bash
@@ -256,6 +259,7 @@ echo '10.0.0.9 spidauth.DOMINIO_ENTE.it' | tee -a /etc/hosts
 ```
 
 11. Configuriamo nginx
+
   ```bash
 # Facciamo una copia di backup della configurazione originale
 mv /etc/nginx/nginx.conf /etc/nginx/nginx_bckol9.conf
@@ -265,12 +269,12 @@ mv /etc/nginx/nginx.conf /etc/nginx/nginx_bckol9.conf
   ```bash
 mkdir /opt/nginx_certs
 ```
-  e copiarci i certificati ssl registrati per il proprio ente per *.DOMINIO_ENTE.it oppure se non wildcard
+  Copiamo i certificati ssl registrati per il proprio ente per *.DOMINIO_ENTE.it oppure se non wildcard
   per spidauth.DOMINIO_ENTE.it
 
   Creamo il file `/etc/nginx/nginx.conf` con questo contenuto:
 
-```nginx
+  ```nginx
 user nginx;
 worker_processes auto;
 error_log /var/log/nginx/error.log;
@@ -389,6 +393,7 @@ server {
 12. Configuriamo il servizio satosa:
 
   Creare il file `/etc/systemd/system/satosa.service` con questo contenuto:
+
   ```ini
 Description=UWSGI server for Satosa Proxy
 After=syslog.target
@@ -408,6 +413,7 @@ WantedBy=sockets.target
 ```
 
   Creare il file `/etc/systemd/system/satosa.socket` con questo contenuto:
+
   ```ini
 [Unit]
 Description=Socket for satosa
@@ -422,7 +428,16 @@ SocketMode=0770
 WantedBy=sockets.target
 ```
 
-Sovrascriviamo il file `/opt/satosa_spid_proxy/uwsgi_setup/uwsgi/uwsgi.ini.socket` con questo contenuto:
+  Determiniamo la versione di python utilizzata con questo comando:
+
+  ```bash
+  python -c 'import sys; print(f"python{sys.version_info.major}.{sys.version_info.minor}")'
+```
+
+  Sovrascriviamo il file `/opt/satosa_spid_proxy/uwsgi_setup/uwsgi/uwsgi.ini.socket` con questo contenuto
+  sostituendo la stringa python3.9 all'interno della proprietà satosa_app con la stringa recuperata al passo
+  precedente:
+  
   ```ini
 [uwsgi]
 # Questo deve essere il nome della cartella dove abbiamo installato satosa
@@ -434,6 +449,10 @@ base        = /opt
 ##################
 ## SATOSA_APP=$VIRTUAL_ENV/lib/$(python -c 'import sys; print(f"python{sys.version_info.major}.{sys.version_info.minor}")')/site-packages/satosa
 ## uwsgi --wsgi-file $SATOSA_APP/wsgi.py  --socket /opt/satosa_spid_proxy/tmp/sockets/satosa.sock --callable app -b 32768
+# Sostituire python3.9 con la versione di python installata. Per determinare la versione installata
+# utilizzare questo comando: 
+#    python -c 'import sys; print(f"python{sys.version_info.major}.{sys.version_info.minor}")'
+# l'output va messo al posto di python3.9 qui sotto
 satosa_app  = /opt/satosa_spid_proxy/satosa.env/lib/python3.9/site-packages/satosa 
 
 chdir       = %(base)/%(project)
@@ -458,6 +477,24 @@ buffer-size=32768
 pidfile     = %(base)/%(project)/logs/uwsgi/%(project).pid
 touch-reload    = %(base)/%(project)/proxy_conf.yaml
 ```
+
+  Sovrascriviamo i seguenti file con quelli presenti in questa cartella nel repository:
+  
+  * `/opt/satosa_spid_proxy/proxy_conf.yaml`
+  * `/opt/satosa_spid_proxy/plugins/backends/spidsaml2_backend.yaml`
+  * `/opt/satosa_spid_proxy/plugins/frontends/saml2_frontend.yaml`
+  * `/opt/satosa_spid_proxy/plugins/microservices/target_based_routing.yaml`
+
+  Aggiornando:
+  * per tutti i file DOMINIO_ENTE.it con il proprio dominio
+  * in proxy_conf.yaml sostituire i CHANGE_ME con stringhe casuali
+  * in spidsaml2_backend.yaml:
+    * correggere name e display name di organization
+    * in contact_person -> contact_type aggiornare con i propri valori
+      * telephone_number: numero di telefono col +39 avanti
+      * email_address: indirizzo posta elettronica non personale (per esempio: sistemi.informativi@DOMINIO_ENTE.it)
+      * VATNumber: partita iva ente
+      * IPACode: codice ipa ente
 
   Creamo le cartelle e abilitiamo i servizi all'avvio:
   ```bash
