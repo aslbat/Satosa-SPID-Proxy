@@ -545,9 +545,9 @@ wget https://registry.spid.gov.it/metadata/idp/spid-entities-idps.xml -O /opt/sa
   finale `</md:EntitiesDescriptor>`, in questo modo:
 
   ```xml
-  ...
-  <md:EntityDescriptor ID="_feb2b3550c8b9605fd73fe0fe8d3c94f4ba8f5e74e" entityID="https://spidvalidator.DOMINIO_ENTE.it" ....
-  <md:EntityDescriptor ID="_3f7b3aa70ad110567535fa94636428f5f1f656ecf0" entityID="https://spidvalidator.DOMINIO_ENTE.it/demo" ...
+    ...
+    <md:EntityDescriptor ID="_feb2b3550c8b9605fd73fe0fe8d3c94f4ba8f5e74e" entityID="https://spidvalidator.DOMINIO_ENTE.it" ....
+    <md:EntityDescriptor ID="_3f7b3aa70ad110567535fa94636428f5f1f656ecf0" entityID="https://spidvalidator.DOMINIO_ENTE.it/demo" ...
 </md:EntitiesDescriptor>
 ```
 
@@ -573,3 +573,111 @@ salvando i loro metadata.xml come service provider nella cartella `/opt/satosa_s
 
 
 ### 4. Configurazione servizio di test
+
+Anche qui installiamo un'applicazione di test in php. Utilizziamo sempre Oracle Linux 9,
+impostiamo l'ip del nostro esempio 10.0.0.10 e hostname servizio_al_pubblico.DOMINIO_ENTE.it.
+Configuriamo come sopra la **sincronizzazione dell'orologio** con chrony e il file `/etc/hosts` sempre
+con gli host configurati nei server precedenti.
+
+1. Installiamo i pacchetti che ci servono:
+
+```bash
+dnf install -y nginx php php-xml php-fpm
+systemctl enable --now php-fpm
+cd /var
+wget https://github.com/simplesamlphp/simplesamlphp/releases/download/v1.19.6/simplesamlphp-1.19.6.tar.gz
+tar xzf simplesamlphp-1.19.6.tar.gz
+mv simplesamlphp-1.19.6 simplesamlphp
+\rm simplesamlphp-1.19.6.tar.gz
+```
+
+2. Configuriamo il virtualhost in nginx, creamo il file `/etc/nginx/conf.d/servizio_al_pubblico.conf` con questo contenuto:
+
+```nginx
+##############################################################
+# In /etc/nginx/conf.d/servizio_al_pubblico.conf
+#
+# Virtual Host servizio_al_pubblico.DOMINIO_ENTE.it
+##############################################################
+server {
+    listen 443 ssl;
+    server_name servizio_al_pubblico.DOMINIO_ENTE.it;
+    ssl_certificate /opt/nginx_certs/_.DOMINIO_ENTE.it.cer;
+    ssl_certificate_key /opt/nginx_certs/_.DOMINIO_ENTE.it.key;
+    ssl_protocols          TLSv1.3 TLSv1.2;
+    ssl_ciphers            EECDH+AESGCM:EDH+AESGCM;
+
+    location ^~ /simplesaml {
+        alias /var/simplesamlphp/www;
+        index index.php;
+
+        location ~ ^(?<prefix>/simplesaml)(?<phpfile>.+?\.php)(?<pathinfo>/.*)?$ {
+            include          fastcgi_params;
+            fastcgi_pass     php-fpm;
+            fastcgi_param SCRIPT_FILENAME $document_root$phpfile;
+
+            # Must be prepended with the baseurlpath
+            fastcgi_param SCRIPT_NAME /simplesaml$phpfile;
+
+            fastcgi_param PATH_INFO $pathinfo if_not_empty;
+        }
+    }
+}
+##############################################################
+```
+
+3. Scarico l'xml dell'IDP interno satosa:
+wget --no-check-certificate https://spidauth.DOMINIO_ENTE.it/Saml2IDP/metadata -O /var/simplesamlphp/config/metadata-idp-satosa.xml
+
+4. Modifico la configurazione di simplesamlphp, impostando i parametri nel file `/var/simplesamlphp/config/config.php`:
+
+```php
+    'secretsalt' => 'defaultsecret____stringa___casuale',
+    'auth.adminpassword' => 'password123_utente_admin',
+    'timezone' => 'Europe/Rome',
+    # il logger (altrimenti va sul syslog)
+    'logging.handler' => 'file',
+    'metadata.sources' => [
+        ['type' => 'flatfile'],
+        ['type' => 'xml', 'file' => 'config/metadata-idp-satosa.xml']
+    ],
+```
+
+6. Configuro i permessi e riavvio nginx:
+
+```bash
+# Altrimenti i log non riesce a scriverli nella cartella log (vedi /var/log/php-fpm/www-error.log)
+chown -R apache:apache /var/simplesamlphp
+service nginx restart
+```
+
+7. Accedere a questo link e verificare che funzioni:
+https://servizio_al_pubblico.DOMINIO_ENTE.it/simplesaml/module.php/core/frontpage_welcome.php
+
+8. Scarico l'xml del sp di simplesaml andando da Federazione > Mostra metadati e lo salvo nella
+cartella metadata/sp sul server satosa configurato prima con ip 10.0.0.8
+
+9. A questo punto provo l'autenticazione, accedere a questo link:
+https://servizio_al_pubblico.DOMINIO_ENTE.it/simplesaml/module.php/core/frontpage_welcome.php
+andare in Autenticazione > Prova le fonti di autenticazione configurate > default-sp
+Scegliere il provider VALIDATOR DEMO o VALIDATOR e inserire per il DEMO le utenze di test visibili
+da: https://spidvalidator.aslbat.it/demo > visualizza utenti di test, per il VALIDATOR
+l'utente validator/validator.
+Ricordarsi prima però di caricare l'xml del service provider di satosa con questo link: https://10.0.0.9/spidSaml2/metadata
+nella sezione Metadata SP > Download del validator a questo link  https://spidvalidator.aslbat.it
+
+10. Per non passare dalla schermata di scelta dell'IDP, tanto c'è solo 1 configurato
+impostare la proprieta' idp nel file /var/simplesamlphp/config/authsources.php
+in questo modo, invece di null:
+
+```php
+    'default-sp' => [
+        'saml:SP',
+
+        //'idp' => null,
+        'idp' => 'https://spidauth.DOMINIO_ENTE.it/Saml2IDP/metadata',
+        ....
+```
+
+
+
