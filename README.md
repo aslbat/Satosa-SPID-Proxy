@@ -25,8 +25,11 @@ Termini utilizzati nella guida:
   * Mod_Shib (ShibbolethSP)
   * ShibbolethIDP
   * ShibbolethDS
-* Non c'è passaggio di RemoteUser, Header HTTP e altro on-the-wire
-* I software da installare con Satosa sono:
+* Le ultime versioni shibboleth (4.1.2 e 4.0.1) generano questo errore:
+  `2022-11-03 11:25:01,776 - 10.111.1.205 - ERROR [net.shibboleth.idp.authn:-2] - Uncaught runtime exception
+  net.shibboleth.utilities.java.support.logic.ConstraintViolationException: Username cannot be null or empty`
+* Non c'è passaggio di RemoteUser, Header HTTP e altro
+* I software da installare con Satosa sono solo 2:
   * Nginx
   * Satosa
 
@@ -34,8 +37,8 @@ Termini utilizzati nella guida:
 Il flusso di esecuzione può essere sintetizzato come segue:
 
 1. l'utente si connette ad un servizio SP1
-2. il servizio SP1 lo reinderizza a IDP_SAML2
-3. IDP_SAML2 come SP_SPID mostra una pagina con il pulsante entra con SPID che consente di scegliere l'IDP SPID e si autentica
+2. il servizio SP1 lo reinderizza a IDP_SAML2 (Satosa)
+3. IDP_SAML2 (Satosa) come SP_SPID (sempre Satosa) mostra una pagina con il pulsante entra con SPID che consente di scegliere l'IDP SPID e si autentica
 4. l'utente autenticato ritorna su SP1, con gli attributi richiesti
 
 ### Hostname utilizzati
@@ -51,9 +54,11 @@ Supponiamo che il nostro ente abbia il dominio DOMINIO_ENTE.it, consideriamo que
 tramite repository docker, non usando i pacchetti di redhat). Il server deve rispondere all'hostname:
 `spidvalidator.DOMINIO_ENTE.it` e ha come ip: `10.0.0.8`.
 
-2. Una volta installato disabilitiamo SELINUX, per non avere problemi con i container, inserendo `SELINUX=permissive` nel file `/etc/sysconfig/selinux`
+2. Una volta installato, accediamo come root
 
-3. Installiamo docker con questi comandi:
+3. Disabilitiamo SELINUX, per non avere problemi con i container, inserendo `SELINUX=permissive` nel file `/etc/sysconfig/selinux`
+
+4. Installiamo docker con questi comandi:
 
   ```bash
 ### COMPLETATA L'INSTALLAZIONE DI OL9 INSTALLIAMO DOCKER
@@ -62,7 +67,7 @@ yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce
 yum install docker-ce docker-ce-cli containerd.io
 ```
 
-4. Configuriamo la sincronizzazione dell'orario. Tutte i server coivolti devono avere l'orario sincronizzato
+5. Configuriamo la sincronizzazione dell'orario. Tutti i server coinvolti devono avere l'orario sincronizzato
 correttamente per evitare errori durante l'autenticazione:
 
   ```bash
@@ -81,7 +86,7 @@ systemctl start chronyd
 #### SINCRONIZZAZIONE OROLOGIO - IMPORTANTE !! #######################################################
 ```
 
-5. Configuriamo gli hostname (nel caso siano configurati sul server DNS questa configurazione non è necessaria)
+6. Configuriamo gli hostname (nel caso siano configurati sul server DNS questa configurazione non è necessaria)
 
   Nel file /etc/hosts del server docker 10.0.0.8 inserire gli host coinvolti con questi comandi:
 
@@ -91,14 +96,14 @@ echo '10.0.0.9  spidauth.DOMINIO_ENTE.it' | tee -a /etc/hosts
 echo '10.0.0.10 servizio_al_pubblico.DOMINIO_ENTE.it' | tee -a /etc/hosts
 ```
 
-6. Avviamo il container italia/spid-saml-check con questi comandi:
+7. Avviamo il container italia/spid-saml-check con questi comandi:
 
   ```bash
   ## Comando per eliminarlo: docker container stop spid_validator && docker container rm spid_validator
   docker run --name spid_validator -p 443:443 --env NODE_HTTPS_PORT=443 --add-host=spidvalidator.DOMINIO_ENTE.it:10.0.0.8 --add-host=spidauth.DOMINIO_ENTE.it:10.0.0.9 --add-host=servizio_al_pubblico.DOMINIO_ENTE.it:10.0.0.10 italia/spid-saml-check:1.9.2
 ```
 
-7. Configuriamo il container per utilizzare la porta 443 invece che la 8443 e gli hostname scelti sopra:
+8. Configuriamo il container per utilizzare la porta 443 invece che la 8443 e gli hostname scelti sopra:
 
   ```bash
 # Entrare nel container e fare queste modifiche
@@ -114,13 +119,13 @@ exit
 docker container stop spid_validator && docker container start spid_validator
 ```
 
-8. Verifichiamo se l'installazione ha funzionato. Dovrebbero rispondere i seguenti link (le credenziali sono validator/validator):
+9. Verifichiamo se l'installazione ha funzionato. Dovrebbero rispondere i seguenti link (le credenziali sono validator/validator):
 * https://10.0.0.8/
 * https://10.0.0.8/metadata.xml
 * https://10.0.0.8/demo
 * https://10.0.0.8/demo/metadata.xml
 
-  e aggiungendo gli host al proprio PC, modificando come amministratore il file `C:\Windows\System32\drivers\etc\hosts` a questi link:
+  e aggiungendo gli host al proprio PC, modificando come amministratore il file `C:\Windows\System32\drivers\etc\hosts` o su linux `/etc/hosts` a questi link:
 
 * https://spidvalidator.DOMINIO_ENTE.it/
 * https://spidvalidator.DOMINIO_ENTE.it/metadata.xml
@@ -143,7 +148,7 @@ mkdir /root/spid_certs
 chmod 777 -R /root/spid_certs
 ```
 
-2. Eseguo il container col comando sotto, corregendo i parametri corretti:
+2. Eseguo il container col comando sotto, correggendo questi parametri:
   * DOMINIO_ENTE.it: inserire quello del proprio ente
   * org-id: deve essere uguale a PA:IT- seguito dal **codice ipa**, per esempio PA:IT-asl_bat
   * entity-id: deve essere uguale a entityID del tag EntityDescriptor nell'xml (quello generato da
@@ -173,10 +178,11 @@ docker run --name spid_genera_certificati -ti --rm \
 
 ### 3. Installazione e configurazione Satosa
 
-1. A questo punto procediamo con l'installazione del server dove installeremo satosa e funzionerà da proxy SPID. Anche qui predisponiamo un nuovo server con Oracle Linux 9.0. Il server nell'esempio risponde all'hostname:
-`spidauth.DOMINIO_ENTE.it` e ha come ip: `10.0.0.9`. L'installazione la faremo nella cartella `/opt/satosa_spid_proxy`.
+1. A questo punto procediamo con l'installazione del server dove installeremo satosa e che funzionerà da proxy SPID. Anche qui predisponiamo
+un nuovo server con Oracle Linux 9.0. Il server nell'esempio risponde all'hostname: `spidauth.DOMINIO_ENTE.it` e ha come ip: `10.0.0.9`.
+L'installazione la faremo nella cartella `/opt/satosa_spid_proxy`.
 
-2. Anche qui configuriamo la sincronizzazione dell'orario. Tutte i server coivolti devono avere l'orario sincronizzato correttamente per evitare errori durante l'autenticazione:
+2. Anche qui configuriamo la sincronizzazione dell'orario. Tutti i server coinvolti devono avere l'orario sincronizzato correttamente per evitare errori durante l'autenticazione:
 
   ```bash
 #### SINCRONIZZAZIONE OROLOGIO - IMPORTANTE !! #######################################################
@@ -244,7 +250,8 @@ cp -R repository/example/* .
   # - "plugins/backends/saml2_backend.yaml"
 ```
 
-9. Disabilitiamo il firewall sulle porte 80 e 443
+9. Disabilitiamo il firewall sulle porte 80 e 443. La 80 è solo per fare i test, al completamento
+dell'installazione serve solo la 443, quindi è possibile ribloccare la 80
 
   ```bash
 firewall-cmd --zone=public --add-service=http
@@ -440,8 +447,10 @@ WantedBy=sockets.target
 ```
 
   Sovrascriviamo il file `/opt/satosa_spid_proxy/uwsgi_setup/uwsgi/uwsgi.ini.socket` con questo contenuto
-  sostituendo la stringa `python3.9` all'interno della proprietà `satosa_app` con la stringa recuperata al passo
-  precedente:
+  effettuando le seguenti operazioni:
+
+  - sostituire la stringa `python3.9` all'interno della proprietà `satosa_app` con la stringa recuperata al passo precedente
+  - impostare a seconda delle esigenze `processes` e `threads`:
   
   ```ini
 [uwsgi]
@@ -459,6 +468,10 @@ base        = /opt
 #    python -c 'import sys; print(f"python{sys.version_info.major}.{sys.version_info.minor}")'
 # l'output va messo al posto di python3.9 qui sotto
 satosa_app  = /opt/satosa_spid_proxy/satosa.env/lib/python3.9/site-packages/satosa 
+
+# ottimizzazione processi e thread (impostare in base alle cpu)
+processes=8
+threads=2
 
 chdir       = %(base)/%(project)
 uid         = satosa
@@ -572,9 +585,9 @@ const idps = [
 salvando i loro metadata.xml come service provider nella cartella `/opt/satosa_spid_proxy/metadata/sp`
 
 
-### 4. Configurazione servizio di test
+### 4. Configurazione servizio di test PHP
 
-Anche qui installiamo un'applicazione di test in php. Utilizziamo sempre Oracle Linux 9,
+A questo punto configuriamo un'applicazione di test in php per testare l'autenticazione. Utilizziamo sempre Oracle Linux 9,
 impostiamo l'ip del nostro esempio 10.0.0.10 e hostname servizio_al_pubblico.DOMINIO_ENTE.it.
 Configuriamo come sopra la **sincronizzazione dell'orologio** con chrony e il file `/etc/hosts` sempre
 con gli host configurati nei server precedenti.
