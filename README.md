@@ -695,5 +695,290 @@ in questo modo, invece di null:
         ....
 ```
 
+### 5. Configurazione servizio di test dotnet
+
+Oltre all'applicazione di test da utilizzare come client (SP) SAML2, di seguito la procedura per
+configurare un'applicazione di test usando dotnet invece di php. Utilizziamo sempre Oracle Linux 9,
+come sdk il dotnet 6.0 e come librerie SAML2 Sustainsys.Saml2
+
+Impostiamo l'ip del nostro esempio 10.0.0.10 (ovviamente cambiarlo se avete già il client php su
+quell'ip, supponiamo che sia installato il client dotnet in alternativa al client php) e come hostname
+supponiamo sempre che sia servizio_al_pubblico.DOMINIO_ENTE.it.
+
+Procediamo in questo modo:
+
+1. Configuriamo come sopra la **sincronizzazione dell'orologio** con chrony e il file `/etc/hosts` sempre
+con gli host configurati nei server precedenti.
+
+2. Installiamo i pacchetti necessari:
+dnf install -y dotnet-sdk-6.0
+
+3. Accediamo come root
+
+4. Creamo il progetto con questi comandi 
+```bash
+cd ~
+mkdir TestSamlSustainsys
+cd TestSamlSustainsys
+dotnet new webapp
+dotnet new sln
+dotnet sln add .
+dotnet dev-certs https
+dotnet dev-certs https --trust
+dotnet add package Sustainsys.Saml2
+dotnet add package Sustainsys.Saml2.AspNetCore2
+```
+
+5. Apriamo la porta 8443 sul firewall:
+```bash
+firewall-cmd --zone=public --add-port=8443/tcp
+firewall-cmd --zone=public --permanent --add-port=8443/tcp
+```
+
+6. Salviamo il certificato di test da qui nella cartella del progetto
+```bash
+cd ~/TestSamlSustainsys
+wget https://github.com/Sustainsys/Saml2/raw/v2/Samples/SampleAspNetCore2ApplicationNETFramework/Sustainsys.Saml2.Tests.pfx
+```
+7. Configuriamo i parametri nel file `~/TestSamlSustainsys/appsettings.json`, aggiungendo all'interno la proprietà
+Saml2, il file di esempio completo dovrebbe essere questo:
+
+```json
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AllowedHosts": "*",
+
+  "Saml2": {
+    "cert": "Sustainsys.Saml2.Tests.pfx",
+    "EntityId": "https://10.0.0.10/Saml2",
+    "MinIncomingSigningAlgorithm": "http://www.w3.org/2000/09/xmldsig#rsa-sha1",
+    "IdpEntityId": "https://spidauth.DOMINIO_ENTE.it/Saml2IDP/metadata",
+    "IdpMetadata": "https://spidauth.DOMINIO_ENTE.it/Saml2IDP/metadata"
+  }
+}
+```
+
+8. Sovrascriviamo il file `~/TestSamlSustainsys/Program.cs`:
+
+```csharp
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+
+/*start***************************************************************************************************/
+using Sustainsys.Saml2;
+using Sustainsys.Saml2.Metadata;
+using Sustainsys.Saml2.AspNetCore2;
+/*end*****************************************************************************************************/
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services to the container.
+builder.Services.AddRazorPages();
+
+/*start***************************************************************************************************/
+/* prima di builder */
+builder.Services.AddAuthentication(sharedOptions =>
+{
+    sharedOptions.DefaultScheme = Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme;
+    sharedOptions.DefaultSignInScheme = Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme;
+    sharedOptions.DefaultChallengeScheme = Sustainsys.Saml2.AspNetCore2.Saml2Defaults.Scheme;
+})
+.AddSaml2(options =>
+{
+    options.SPOptions = new Sustainsys.Saml2.Configuration.SPOptions()
+    {
+        AuthenticateRequestSigningBehavior = Sustainsys.Saml2.Configuration.SigningBehavior.Never,
+        EntityId = new Sustainsys.Saml2.Metadata.EntityId(builder.Configuration.GetValue<string>("Saml2:EntityId")),
+        MinIncomingSigningAlgorithm = builder.Configuration.GetValue<string>("Saml2:MinIncomingSigningAlgorithm")
+    };
+
+    // We need to use a cert for Sustainsys.Saml2 to work with logout, so we borrow their sample cert
+    // https://github.com/Sustainsys/Saml2/blob/v2/Samples/SampleAspNetCore2ApplicationNETFramework/Sustainsys.Saml2.Tests.pfx
+    // https://github.com/Sustainsys/Saml2/raw/v2/Samples/SampleAspNetCore2ApplicationNETFramework/Sustainsys.Saml2.Tests.pfx
+    string certFile = string.Format("{0}\\{1}", System.IO.Directory.GetCurrentDirectory(), builder.Configuration.GetValue<string>("Saml2:cert"));
+    options.SPOptions.ServiceCertificates.Add(new System.Security.Cryptography.X509Certificates.X509Certificate2(certFile));
+
+    // The Azure AD B2C Identity Provider we use
+    options.IdentityProviders.Add(
+        new Sustainsys.Saml2.IdentityProvider(
+        new Sustainsys.Saml2.Metadata.EntityId(builder.Configuration.GetValue<string>("Saml2:IdpEntityId")), options.SPOptions)
+        {
+            MetadataLocation = builder.Configuration.GetValue<string>("Saml2:IdpMetadata"),
+            LoadMetadata = true
+        });
+})
+.AddCookie();
+/* prima di builder */
+/*end*****************************************************************************************************/
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline.
+if (!app.Environment.IsDevelopment())
+{
+    app.UseExceptionHandler("/Error");
+    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
+    app.UseHsts();
+}
+
+app.UseHttpsRedirection();
+app.UseStaticFiles();
+
+app.UseRouting();
+
+app.UseAuthorization();
+
+/*start***************************************************************************************************/
+// IMPORTANTE!! Senza questa l'url /Saml2 non funziona
+app.UseAuthentication();
+/*end*****************************************************************************************************/
+
+app.MapRazorPages();
+
+/*start***************************************************************************************************/
+app.MapControllerRoute(
+        name: "default",
+        pattern: "{controller=Home}/{action=Index}/{id?}");
+/*end*****************************************************************************************************/
+
+app.Run();
+```
+
+9. Creamo il file `~/TestSamlSustainsys/AccountController.cs`:
+
+```csharp
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Security.Claims;
+using System.Threading.Tasks;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace TestSamlSustainsys.Controllers
+{
+    [AllowAnonymous]
+    [Route("Account")]
+    public class AccountController : Controller
+    {
+        private readonly ILogger<AccountController> _logger;
+        public AccountController(ILogger<AccountController> logger)
+        {
+            _logger = logger;
+        }
+        
+        [Authorize]
+        [Route("Claims")]
+        /*
+        Questo metodo mi preleva i dettagli dell'utente
+        */
+        public string Claims() {
+            if (User.Identity.IsAuthenticated) {
+                string dettagli_utente = "";
+                foreach (Claim claim in User.Claims)
+                {
+                    dettagli_utente += string.Format("{0} {1}\n", claim.Type, claim.Value);
+                }
+                return dettagli_utente;
+
+            } else {
+                return "Utente non autenticato";
+            }
+        }
+
+        [Route("Login")]
+        [HttpGet]
+        public IActionResult Login()
+        {
+            _logger.LogInformation("Login()");
+            return Challenge(new AuthenticationProperties
+            {
+                RedirectUri = Url.Action("Index", "Home")
+            }, Sustainsys.Saml2.AspNetCore2.Saml2Defaults.Scheme);
+        }
+
+        [Route("Logout")]
+        [Authorize]
+        [HttpGet]
+        public IActionResult Logout()
+        {
+            _logger.LogInformation("Logout()");
+            var authProps = new AuthenticationProperties
+            {
+                RedirectUri = Url.Action(nameof(Index), "Home", values: null, protocol: Request.Scheme)
+            };
+            // you need these two in order for Sustainsys.Saml2 to successfully sign out
+            AddAuthenticationPropertiesClaim(authProps, "/SessionIndex");
+            AddAuthenticationPropertiesClaim(authProps, "/LogoutNameIdentifier");
+            return SignOut(authProps, CookieAuthenticationDefaults.AuthenticationScheme, Sustainsys.Saml2.AspNetCore2.Saml2Defaults.Scheme);
+        }
+        private void AddAuthenticationPropertiesClaim(AuthenticationProperties authProps, string name)
+        {
+            string claimValue = GetClaimValue(name, out string claimName);
+            if (!string.IsNullOrEmpty(claimValue))
+                authProps.Items[claimName] = claimValue;
+        }
+        private string GetClaimValue(string name, out string fullName)
+        {
+            fullName = null;
+            name = name.ToLowerInvariant();
+            foreach (Claim claim in User.Claims) {
+                if (claim.Type.ToLowerInvariant().Contains(name))  {
+                    fullName = claim.Type;
+                    return claim.Value;
+                }
+            }
+            return null;
+        }
+    } // cls
+} // ns
+```
+10. Aggiorniamo il file di layout `~/TestSamlSustainsys/Pages/Shared/_Layout.cshtml` inserendo dopo il link privacy il testo:
+
+```html
+<li class="nav-item">
+    <a class="nav-link text-dark" asp-area="" asp-page="/Privacy">Privacy</a>
+</li>
+
+@if (User.Identity.IsAuthenticated)
+{
+    <li class="nav-item">
+        <a class="nav-link text-dark" asp-controller="Account" asp-action="Claims">Dettagli utente</a>
+    </li>
+}
+else {
+    <li class="nav-item">
+        <a class="nav-link text-dark" asp-controller="Account" asp-action="Login">Login</a>
+    </li>
+
+}
+```
 
 
+11. A questo punto avviamo la webapp con:
+
+```bash
+cd ~/TestSamlSustainsys
+dotnet watch run --urls="https://10.0.0.10:8443"
+```
+
+e all'url https://10.0.0.10:8443/Saml2 dovrebbe rispondere il metadata. Se all'url non risponde
+nulla verificare che ci sia in Program.cs la chiamata al metodo app.UseAuthentication().
