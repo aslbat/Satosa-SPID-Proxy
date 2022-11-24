@@ -698,12 +698,13 @@ in questo modo, invece di null:
 ### 5. Configurazione servizio di test dotnet
 
 Oltre all'applicazione di test da utilizzare come client (SP) SAML2, di seguito la procedura per
-configurare un'applicazione di test usando dotnet invece di php. Utilizziamo sempre Oracle Linux 9,
-come sdk il dotnet 6.0 e come librerie SAML2 Sustainsys.Saml2
+configurare un'applicazione di test usando dotnet invece di php. Utilizzeremo sempre Oracle Linux 9,
+come sdk il dotnet 6.0 e come librerie SAML2 Sustainsys.Saml2.
 
-Impostiamo l'ip del nostro esempio 10.0.0.10 (ovviamente cambiarlo se avete già il client php su
-quell'ip, supponiamo che sia installato il client dotnet in alternativa al client php) e come hostname
-supponiamo sempre che sia servizio_al_pubblico.DOMINIO_ENTE.it.
+Impostiamo l'ip del nostro esempio 10.0.0.10. Se abbiamo configurato il client php al punto precedente
+possiamo riutilizzare lo stesso server, utilizzeremo nel nostro esempio la porta 8443, in modo tale
+da non farla andare in conflitto con la 443 usata dal php. Come hostname supponiamo sempre che sia
+servizio_al_pubblico.DOMINIO_ENTE.it.
 
 Procediamo in questo modo:
 
