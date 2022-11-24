@@ -957,13 +957,14 @@ namespace TestSamlSustainsys.Controllers
 } // ns
 ```
 10. Aggiorniamo il file di layout `~/TestSamlSustainsys/Pages/Shared/_Layout.cshtml` inserendo dopo il link privacy l'if
-indicato sotto:
+indicato sotto (la parte aggiunta è quella compresa tra i commenti):
 
 ```html
 <li class="nav-item">
     <a class="nav-link text-dark" asp-area="" asp-page="/Privacy">Privacy</a>
 </li>
 
+<!-- start*************************************************************************************************** -->
 @if (User.Identity.IsAuthenticated)
 {
     <li class="nav-item">
@@ -979,6 +980,7 @@ else {
     </li>
 
 }
+<!-- end***************************************************************************************************** -->
 ```
 
 
@@ -1035,3 +1037,32 @@ nella sezione Metadata SP > Download del validator a questo link https://spidval
 
 Se l'autenticazione andrà a buon fine, vedremo al posto del link `Login` il link `Dettagli utente`.
 Cliccandoci verranno visualizzati gli attributi SPID dell'utente collegato.
+
+15. Se vogliamo possiamo configurare l'app per avviarla come servizio:
+  Torniamo sul server 10.0.0.10 e creamo il file `/etc/systemd/system/test_saml_sustainsys.service` con questo contenuto:
+
+```ini
+[Unit]
+Description=Sample SAML dotnet Service Provider
+
+[Service]
+WorkingDirectory=/root/TestSamlSustainsys
+ExecStart=/usr/bin/dotnet /root/TestSamlSustainsys/bin/Debug/net6.0/TestSamlSustainsys.dll
+Restart=always
+RestartSec=10
+KillSignal=SIGINT
+SyslogIdentifier=dotnet-TestSamlSustainsys
+# Cambio la porta, altrimenti mi mette quelle di default (5000/http e 5001/https)
+Environment=ASPNETCORE_URLS=https://10.14.201.209:8443
+
+[Install]
+WantedBy=multi-user.target
+```
+
+  configuriamo il servizio per avviarlo in automatico all'avvio, e lo avviamo:
+
+```bash
+systemctl daemon-reload
+systemctl enable test_saml_sustainsys.service
+service test_saml_sustainsys start
+```
