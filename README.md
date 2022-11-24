@@ -741,7 +741,10 @@ cd ~/TestSamlSustainsys
 wget https://github.com/Sustainsys/Saml2/raw/v2/Samples/SampleAspNetCore2ApplicationNETFramework/Sustainsys.Saml2.Tests.pfx
 ```
 7. Configuriamo i parametri nel file `~/TestSamlSustainsys/appsettings.json`, aggiungendo all'interno la proprietà
-Saml2, il file di esempio completo dovrebbe essere questo:
+Saml2, il file di esempio completo dovrebbe essere questo sotto. I valori da verificare sono:
+
+- EntityId: correggere ip e porta se modificati (devono corrispondere all'ip e alla porta della nostra webapp dotnet)
+- IdpEntityId e IdpMetadata: correggerli in base al proprio server satosa, se abbiamo seguito i passi precedenti va cambiato solo DOMINIO_ENTE col proprio dominio
 
 ```json
 {
@@ -755,7 +758,7 @@ Saml2, il file di esempio completo dovrebbe essere questo:
 
   "Saml2": {
     "cert": "Sustainsys.Saml2.Tests.pfx",
-    "EntityId": "https://10.0.0.10/Saml2",
+    "EntityId": "https://10.0.0.10:8443/Saml2",
     "MinIncomingSigningAlgorithm": "http://www.w3.org/2000/09/xmldsig#rsa-sha1",
     "IdpEntityId": "https://spidauth.DOMINIO_ENTE.it/Saml2IDP/metadata",
     "IdpMetadata": "https://spidauth.DOMINIO_ENTE.it/Saml2IDP/metadata"
@@ -763,7 +766,8 @@ Saml2, il file di esempio completo dovrebbe essere questo:
 }
 ```
 
-8. Sovrascriviamo il file `~/TestSamlSustainsys/Program.cs`:
+8. Sovrascriviamo il file `~/TestSamlSustainsys/Program.cs` con questo contenuto, le parti aggiunte rispetto
+al file generato dal template sono indicate tra i commenti start ed end:
 
 ```csharp
 using System;
@@ -808,7 +812,7 @@ builder.Services.AddAuthentication(sharedOptions =>
     // We need to use a cert for Sustainsys.Saml2 to work with logout, so we borrow their sample cert
     // https://github.com/Sustainsys/Saml2/blob/v2/Samples/SampleAspNetCore2ApplicationNETFramework/Sustainsys.Saml2.Tests.pfx
     // https://github.com/Sustainsys/Saml2/raw/v2/Samples/SampleAspNetCore2ApplicationNETFramework/Sustainsys.Saml2.Tests.pfx
-    string certFile = string.Format("{0}\\{1}", System.IO.Directory.GetCurrentDirectory(), builder.Configuration.GetValue<string>("Saml2:cert"));
+    string certFile = string.Format("{0}{1}{2}", System.IO.Directory.GetCurrentDirectory(), Path.DirectorySeparatorChar, builder.Configuration.GetValue<string>("Saml2:cert"));
     options.SPOptions.ServiceCertificates.Add(new System.Security.Cryptography.X509Certificates.X509Certificate2(certFile));
 
     // The Azure AD B2C Identity Provider we use
@@ -951,7 +955,8 @@ namespace TestSamlSustainsys.Controllers
     } // cls
 } // ns
 ```
-10. Aggiorniamo il file di layout `~/TestSamlSustainsys/Pages/Shared/_Layout.cshtml` inserendo dopo il link privacy il testo:
+10. Aggiorniamo il file di layout `~/TestSamlSustainsys/Pages/Shared/_Layout.cshtml` inserendo dopo il link privacy l'if
+indicato sotto:
 
 ```html
 <li class="nav-item">
@@ -963,6 +968,9 @@ namespace TestSamlSustainsys.Controllers
     <li class="nav-item">
         <a class="nav-link text-dark" asp-controller="Account" asp-action="Claims">Dettagli utente</a>
     </li>
+    <li class="nav-item">
+        <a class="nav-link text-dark" asp-controller="Account" asp-action="Logout">Logout</a>
+    </li>
 }
 else {
     <li class="nav-item">
@@ -973,12 +981,56 @@ else {
 ```
 
 
-11. A questo punto avviamo la webapp con:
+11. Abbiamo completato le modifiche, avviamo la webapp con:
 
 ```bash
 cd ~/TestSamlSustainsys
 dotnet watch run --urls="https://10.0.0.10:8443"
 ```
 
-e all'url https://10.0.0.10:8443/Saml2 dovrebbe rispondere il metadata. Se all'url non risponde
-nulla verificare che ci sia in Program.cs la chiamata al metodo app.UseAuthentication().
+12. Verifichiamo il funzionamento della webapp
+
+A questo punto con Chrome (con Firefox non funziona, non gli piace il certificato di test)
+andiamo all'url della nostra webapp: https://10.0.0.10:8443 e vediamo se l'applicazione sta funzionando.
+Clicchiamo sul link `Login` in alto accanto al link `Privacy` e dovremmo ottenere questo messaggio:
+
+`Unknown System Entity ID - please check requester entity ID, AssertionConsumerService definitions and other possible mismatches between Service Provider Metadata and its AuthnRequest.`
+
+Il messaggio è normale ed è dovuto al fatto che dobbiamo aggiungere il metadata della nostra webapp
+(che funge da Service Provider SAML) al server satosa (che fa da IDP SAML).
+
+13. Aggiungiamo il metadata SP a quelli gestiti dall'IDP satosa
+
+  Sempre con Chrome andiamo all'url https://10.0.0.10:8443/Saml2 al quale dovrebbe rispondere il metadata.
+  L'xml non verrà visualizzato all'interno del browser, ma verrà scaricato direttamente come file
+  con nome <IP.PORTA>_Saml2.xml che nel nostro esempio sarà:
+
+10.0.0.10.8443_Saml2.xml
+
+(Se all'url non risponde nulla verificare che ci sia in Program.cs la chiamata al metodo app.UseAuthentication())
+
+Questo andrà salvato in satosa nella cartella dei metadati dei SP che nel nostro server satosa 10.0.0.8 è
+`/opt/satosa_spid_proxy/metadata/sp`.
+Per cui colleghiamoci sul server satosa e scarichiamo il file in questa cartella:
+
+```
+# Colleghiamoci al server 10.0.0.9 spidauth.DOMINIO_ENTE.it
+wget https://10.0.0.10:8443/Saml2 --no-check-certificate -O /opt/satosa_spid_proxy/metadata/sp/TestSamlSustainsys.xml
+# Cambiamo il proprietario del file (non dovrebbe essere necessario)
+chown satosa:satosa /opt/satosa_spid_proxy/metadata/sp/TestSamlSustainsys.xml
+# Riavviamo il servizio per far caricare il metadata aggiunto
+service satosa restart
+```
+
+14. Verifichiamo l'autenticazione SAML
+Abbiamo terminato, torniamo sul link `Login` al punto precedente e vedremo che verrà
+visualizzata la pagina di satosa col pulsante "Entra con SPID" e autentichiamoci.
+
+Scegliere il provider VALIDATOR DEMO o VALIDATOR e inserire per il DEMO le utenze di test visibili
+da: https://spidvalidator.aslbat.it/demo > visualizza utenti di test, per il VALIDATOR
+l'utente validator/validator.
+Ricordarsi prima però di caricare l'xml del service provider di satosa con questo link: https://10.0.0.9/spidSaml2/metadata
+nella sezione Metadata SP > Download del validator a questo link https://spidvalidator.aslbat.it
+
+Se l'autenticazione andrà a buon fine, vedremo al posto del link `Login` il link `Dettagli utente`.
+Cliccandoci verranno visualizzati gli attributi SPID dell'utente collegato.
