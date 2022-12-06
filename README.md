@@ -26,7 +26,7 @@ Termini utilizzati nella guida:
   * ShibbolethIDP
   * ShibbolethDS
 * Le ultime versioni shibboleth (4.1.2 e 4.0.1) generano questo errore:
-  `2022-11-03 11:25:01,776 - 10.111.1.205 - ERROR [net.shibboleth.idp.authn:-2] - Uncaught runtime exception
+  `2022-11-03 11:25:01,776 - 10.0.0.205 - ERROR [net.shibboleth.idp.authn:-2] - Uncaught runtime exception
   net.shibboleth.utilities.java.support.logic.ConstraintViolationException: Username cannot be null or empty`
 * Non c'è passaggio di RemoteUser, Header HTTP e altro
 * I software da installare con Satosa sono solo 2:
@@ -677,10 +677,10 @@ cartella metadata/sp sul server satosa configurato prima con ip 10.0.0.8
 https://servizio_al_pubblico.DOMINIO_ENTE.it/simplesaml/module.php/core/frontpage_welcome.php
 andare in Autenticazione > Prova le fonti di autenticazione configurate > default-sp
 Scegliere il provider VALIDATOR DEMO o VALIDATOR e inserire per il DEMO le utenze di test visibili
-da: https://spidvalidator.aslbat.it/demo > visualizza utenti di test, per il VALIDATOR
+da: https://spidvalidator.DOMINIO_ENTE.it/demo > visualizza utenti di test, per il VALIDATOR
 l'utente validator/validator.
 Ricordarsi prima però di caricare l'xml del service provider di satosa con questo link: https://10.0.0.9/spidSaml2/metadata
-nella sezione Metadata SP > Download del validator a questo link  https://spidvalidator.aslbat.it
+nella sezione Metadata SP > Download del validator a questo link  https://spidvalidator.DOMINIO_ENTE.it
 
 10. Per non passare dalla schermata di scelta dell'IDP, tanto c'è solo 1 configurato
 impostare la proprieta' idp nel file /var/simplesamlphp/config/authsources.php
@@ -1030,10 +1030,10 @@ Abbiamo terminato, torniamo sul link `Login` al punto precedente e vedremo che v
 visualizzata la pagina di satosa col pulsante "Entra con SPID" e autentichiamoci.
 
 Scegliere il provider VALIDATOR DEMO o VALIDATOR e inserire per il DEMO le utenze di test visibili
-da: https://spidvalidator.aslbat.it/demo > visualizza utenti di test, per il VALIDATOR
+da: https://spidvalidator.DOMINIO_ENTE.it/demo > visualizza utenti di test, per il VALIDATOR
 l'utente validator/validator.
 Ricordarsi prima però di caricare l'xml del service provider di satosa con questo link: https://10.0.0.9/spidSaml2/metadata
-nella sezione Metadata SP > Download del validator a questo link https://spidvalidator.aslbat.it
+nella sezione Metadata SP > Download del validator a questo link https://spidvalidator.DOMINIO_ENTE.it
 
 Se l'autenticazione andrà a buon fine, vedremo al posto del link `Login` il link `Dettagli utente`.
 Cliccandoci verranno visualizzati gli attributi SPID dell'utente collegato.
@@ -1053,7 +1053,7 @@ RestartSec=10
 KillSignal=SIGINT
 SyslogIdentifier=dotnet-TestSamlSustainsys
 # Cambio la porta, altrimenti mi mette quelle di default (5000/http e 5001/https)
-Environment=ASPNETCORE_URLS=https://10.14.201.209:8443
+Environment=ASPNETCORE_URLS=https://10.0.0.10:8443
 
 [Install]
 WantedBy=multi-user.target
